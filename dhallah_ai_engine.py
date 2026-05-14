@@ -1,3 +1,24 @@
+from flask import Flask
+import threading
+
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return "AI Engine is Running!"
+
+def start_server():
+    # Render يطلب تشغيل التطبيق على بورت معين
+    app.run(host='0.0.0.0', port=10000)
+
+if __name__ == "__main__":
+    # تشغيل سيرفر الويب في "خيط" منفصل عشان ما يوقف كود الذكاء
+    threading.Thread(target=start_server).start()
+    
+    # هنا كود الذكاء الاصطناعي حقك اللي سويتيه
+    while True:
+        run_matching_logic() # الدالة اللي فيها شغلك
+        time.sleep(300)
 # -*- coding: utf-8 -*-
 """Dhallah_AI_Engine.ipynb
 
