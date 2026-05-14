@@ -63,11 +63,36 @@ def monitor_reports():
             print(f">>> [CRITICAL] Scan error: {e}")
         
         time.sleep(20)
+from flask import Flask
+import threading
+import os
+
+app = Flask(__name__)
+
+@app.route('/')
+def health_check():
+    return "AI Engine is Running!"
+
+def start_server():
+    # هذا السطر ضروري عشان Render يعرف إن السيرفر شغال
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host='0.0.0.0', port=port)
 
 if __name__ == "__main__":
-    # تشغيل Flask في Thread منفصل
-    print(">>> [SYSTEM] Launching Flask health check server...")
-    threading.Thread(target=start_flask, daemon=True).start()
+    # 1. تشغيل سيرفر الويب في "خيط" منفصل
+    threading.Thread(target=start_server, daemon=True).start()
     
-    # تشغيل مراقب التقارير
-    monitor_reports()
+    print("Initializing Dhallah AI Engine...")
+    print("Listening for incoming reports...")
+
+    # 2. تشغيل المراقب اللحظي (on_snapshot) اللي موجود أصلاً في كودك
+    # تأكدي إن المتغير db معرف فوق في كودك
+    reports_query = db.collection('reports')
+    query_watch = reports_query.on_snapshot(on_snapshot)
+
+    # 3. إبقاء الكود شغال للأبد
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("Stopping AI Engine...")
