@@ -28,12 +28,6 @@ Original file is located at
     https://colab.research.google.com/drive/1KVuYDmmiT6wIXofqBqXkhmfZb4q7oNbm
 """
 
-!pip install -q firebase-admin
-!pip install -q torch torchvision torchaudio
-!pip install -q transformers sentence-transformers
-!pip install -q qdrant-client
-!pip install -q Pillow requests
-!pip install -q colorama
 
 print("All required packages have been installed successfully!")
 
