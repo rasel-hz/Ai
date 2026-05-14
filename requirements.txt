@@ -1,4 +1,5 @@
 flask
+gunicorn
 firebase-admin
 sentence-transformers
 torch
