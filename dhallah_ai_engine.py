@@ -22,8 +22,7 @@ from firebase_admin import firestore
 import requests
 from PIL import Image
 from io import BytesIO
-
-cred_path = '/content/dhallahapp-firebase-adminsdk-fbsvc-a887b54b43.json'
+cred_path = 'firebase_key.json'
 try:
     if not firebase_admin._apps:
         cred = credentials.Certificate(cred_path)
