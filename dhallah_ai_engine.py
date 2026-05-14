@@ -12,7 +12,8 @@ from io import BytesIO
 
 # --- 1. تحميل الموديلات (نفس اللي كانت عندك) ---
 # ملاحظة: أول تشغيل بياخذ وقت عشان يحمل الموديل
-model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2') 
+# هذا الموديل أصغر بكثير وأسرع، ومناسب جداً لذاكرة Render المحدودة
+model = SentenceTransformer('distiluse-base-multilingual-cased-v1')
 
 app = Flask(__name__)
 @app.route('/')
