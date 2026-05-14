@@ -51,27 +51,39 @@ def calculate_matching(new_report):
     return None
 
 def on_snapshot(col_snapshot, changes, read_time):
+    import gc # استدعاء مكتبة تنظيف الذاكرة
     for change in changes:
         if change.type.name in ['ADDED', 'MODIFIED']:
             doc = change.document
             data = doc.to_dict()
             if data.get('ai_status') == 'pending':
                 print(f">>> Processing report: {doc.id}")
-                match_id = calculate_matching(data)
                 
-                if match_id:
-                    db.collection('reports').document(doc.id).update({
-                        'ai_status': 'completed',
-                        'match_found': True,
-                        'matched_with': match_id
-                    })
-                    print(f">>> MATCH FOUND: {doc.id} with {match_id}")
-                else:
-                    db.collection('reports').document(doc.id).update({
-                        'ai_status': 'completed',
-                        'match_found': False
-                    })
-                    print(">>> No match found.")
+                try:
+                    # تنفيذ عملية المطابقة
+                    match_id = calculate_matching(data)
+                    
+                    if match_id:
+                        db.collection('reports').document(doc.id).update({
+                            'ai_status': 'completed',
+                            'match_found': True,
+                            'matched_with': match_id
+                        })
+                        print(f">>> MATCH FOUND: {doc.id} with {match_id}")
+                    else:
+                        db.collection('reports').document(doc.id).update({
+                            'ai_status': 'completed',
+                            'match_found': False
+                        })
+                        print(">>> No match found.")
+                
+                except Exception as e:
+                    print(f">>> Error during processing: {e}")
+                
+                finally:
+                    # أهم خطوة: تنظيف الرام بعد ما تخلص معالجة البلاغ الحالي
+                    gc.collect()
+                    print(f">>> RAM cleaned after processing {doc.id}")
 
 # --- 4. التشغيل ---
 if __name__ == "__main__":
