@@ -425,13 +425,27 @@ def on_snapshot(col_snapshot, changes, read_time):
 print("Initializing Dhallah AI Engine (v5 - Symmetric, Auto-Delete, Protect, Smart Pruning, Closed Cleanup)...")
 print("Listening for incoming reports...")
 
-reports_query = db.collection('reports')
-query_watch = reports_query.on_snapshot(on_snapshot)
-
-try:
+def start_processing():
+    print("AI Engine is scanning for pending reports...")
     while True:
-        time.sleep(1)
-except KeyboardInterrupt:
-    print(f"\n{Fore.RED}Stopping AI Engine...")
-    query_watch.unsubscribe()
-    print(f"{Fore.RED}Worker stopped safely.")
+        try:
+            # ابحث عن كل البلاغات اللي حالتها pending
+            docs = db.collection('reports').where('ai_status', '==', 'pending').stream()
+            
+            for doc in docs:
+                print(f"Found pending report: {doc.id}. Starting processing...")
+                # استدعاء دالة المعالجة الموجودة في كودك أصلاً
+                # تأكدي أن اسم الدالة هنا يطابق الدالة اللي تعالج البيانات عندك
+                on_snapshot_manual(doc) 
+                
+        except Exception as e:
+            print(f"Error during scan: {e}")
+        
+        time.sleep(30) # انتظر 30 ثانية قبل الفحص التالي
+
+if __name__ == "__main__":
+    # تشغيل Flask في الخلفية ليرضي Render
+    threading.Thread(target=start_server).start()
+    
+    # تشغيل الفحص الدوري
+    start_processing()
