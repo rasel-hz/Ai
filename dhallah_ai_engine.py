@@ -1,95 +1,82 @@
-# -*- coding: utf-8 -*-
 import firebase_admin
 from firebase_admin import credentials, firestore
 import time
 import threading
 import os
 from flask import Flask
-from colorama import Fore, init
+# تأكدي إن هالمكتبات موجودة في requirements.txt
+from sentence_transformers import SentenceTransformer, util
+from PIL import Image
+import requests
+from io import BytesIO
 
-# تهيئة الألوان للـ Logs
-init(autoreset=True)
+# --- 1. تحميل الموديلات (نفس اللي كانت عندك) ---
+# ملاحظة: أول تشغيل بياخذ وقت عشان يحمل الموديل
+model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2') 
 
-# --- 1. إعداد Flask للتشغيل على Render (عشان ما يطفي السيرفر) ---
 app = Flask(__name__)
-
 @app.route('/')
-def health_check():
-    return "Dhallah AI Engine is Running!"
+def health_check(): return "AI Engine is Active"
 
-def start_server():
-    # Render يطلب تشغيل السيرفر على بورت معين (غالباً 10000)
-    port = int(os.environ.get("PORT", 10000))
-    app.run(host='0.0.0.0', port=port)
-
-# --- 2. إعداد الاتصال بـ Firebase ---
-# تأكدي أن اسم الملف هنا يطابق ما وضعتيه في Secret Files على Render
+# --- 2. إعداد الفايربيس ---
 cred_path = 'firebase_key.json'
-
-try:
-    if not firebase_admin._apps:
-        if os.path.exists(cred_path):
-            cred = credentials.Certificate(cred_path)
-            firebase_admin.initialize_app(cred)
-            print(f"{Fore.GREEN}>>> Firebase initialized successfully.")
-        else:
-            print(f"{Fore.RED}>>> ERROR: {cred_path} NOT FOUND! Check Render Secret Files.")
-except Exception as e:
-    print(f"{Fore.RED}>>> Firebase initialization failed: {e}")
-
+if not firebase_admin._apps:
+    cred = credentials.Certificate(cred_path)
+    firebase_admin.initialize_app(cred)
 db = firestore.client()
 
-# --- 3. دالة معالجة البلاغات (on_snapshot) ---
+# --- 3. دالة المطابقة الحقيقية (التي كانت تعطيك نتائج زينة) ---
+def calculate_matching(new_report):
+    new_text = new_report.get('description', '')
+    # نجلب كل البلاغات الأخرى للمقارنة
+    all_reports = db.collection('reports').where('ai_status', '==', 'completed').stream()
+    
+    for old_doc in all_reports:
+        old_data = old_doc.to_dict()
+        old_text = old_data.get('description', '')
+        
+        # حساب تشابه النصوص (نفس كودك القديم)
+        emb1 = model.encode(new_text, convert_to_tensor=True)
+        emb2 = model.encode(old_text, convert_to_tensor=True)
+        cosine_scores = util.cos_sim(emb1, emb2)
+        
+        score = cosine_scores.item()
+        print(f"Checking {old_doc.id} - Similarity: {score:.2f}")
+
+        # إذا التشابه عالي (مثلاً أكثر من 0.8) نعتبره تطابق
+        if score > 0.80: 
+            return old_doc.id # وجدنا التطابق!
+    
+    return None
+
 def on_snapshot(col_snapshot, changes, read_time):
     for change in changes:
-        # نعالج البلاغات المضافة حديثاً أو المعدلة
         if change.type.name in ['ADDED', 'MODIFIED']:
             doc = change.document
             data = doc.to_dict()
-            doc_id = doc.id
-            
-            # فحص إذا كانت الحالة 'pending' لبدء محرك الذكاء الاصطناعي
             if data.get('ai_status') == 'pending':
-                print(f"\n{Fore.CYAN}[FIREBASE] New report detected: {doc_id}")
+                print(f">>> Processing report: {doc.id}")
+                match_id = calculate_matching(data)
                 
-                try:
-                    # تحديث الحالة إلى processing لمنع التكرار
-                    db.collection('reports').document(doc_id).update({'ai_status': 'processing'})
-                    
-                    # -------------------------------------------------------
-                    # (هنا يوضع منطق المطابقة الخاص بكِ - Matching Logic)
-                    # -------------------------------------------------------
-                    print(f"{Fore.YELLOW}[AI] Starting matching process for {doc_id}...")
-                    
-                    # مثال لمحاكاة الانتهاء (استبدليه بكود الـ Embedding الخاص بكِ)
-                    time.sleep(2) 
-                    
-                    db.collection('reports').document(doc_id).update({'ai_status': 'completed'})
-                    print(f"{Fore.GREEN}[SUCCESS] Matching completed for {doc_id}")
-                    
-                except Exception as e:
-                    print(f"{Fore.RED}[ERROR] Processing failed for {doc_id}: {e}")
-                    db.collection('reports').document(doc_id).update({'ai_status': 'error'})
+                if match_id:
+                    db.collection('reports').document(doc.id).update({
+                        'ai_status': 'completed',
+                        'match_found': True,
+                        'matched_with': match_id
+                    })
+                    print(f">>> MATCH FOUND: {doc.id} with {match_id}")
+                else:
+                    db.collection('reports').document(doc.id).update({
+                        'ai_status': 'completed',
+                        'match_found': False
+                    })
+                    print(">>> No match found.")
 
-# --- 4. تشغيل النظام ---
+# --- 4. التشغيل ---
 if __name__ == "__main__":
-    # أ. تشغيل سيرفر الويب في Thread منفصل ليبقى Render "صاحي"
-    print(f"{Fore.BLUE}>>> Starting Flask server for Health Check...")
-    threading.Thread(target=start_server, daemon=True).start()
+    port = int(os.environ.get("PORT", 10000))
+    threading.Thread(target=lambda: app.run(host='0.0.0.0', port=port, use_reloader=False), daemon=True).start()
     
-    print(f"{Fore.BLUE}>>> Initializing Dhallah AI Engine...")
-    print(f"{Fore.BLUE}>>> Listening for incoming reports in Firestore...")
-
-    # ب. إعداد مراقب Firebase (Listener)
-    try:
-        reports_query = db.collection('reports')
-        query_watch = reports_query.on_snapshot(on_snapshot)
-    except Exception as e:
-        print(f"{Fore.RED}>>> CRITICAL: Failed to start Firestore Listener: {e}")
-
-    # ج. حلقة لمنع البرنامج من الإغلاق
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print(f"\n{Fore.RED}>>> Stopping AI Engine safely...")
+    print(">>> AI Engine is back with original logic...")
+    db.collection('reports').on_snapshot(on_snapshot)
+    while True: time.sleep(1)
